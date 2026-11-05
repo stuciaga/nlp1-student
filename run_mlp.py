@@ -119,11 +119,15 @@ for run, seed in enumerate(my_seeds):
         )
     )
 
-# --- Print summary ---
+# --- Save accuracies to JSON and print summary ---
 import json
 for name, runs in my_classifiers.items():
     for run_idx, run in enumerate(runs):
-        accs = list(run['accuracies'].values())
-        print(f"{name} seed-{my_seeds[run_idx]}: mean={np.mean(accs):.4f} std={np.std(accs):.4f}")
+        accs = run['accuracies']
+        seed = my_seeds[run_idx]
+        out_path = results_folder / f"{name}/seed-{seed}/accuracies.json"
+        with open(out_path, 'w') as f:
+            json.dump({str(k): v for k, v in accs.items()}, f)
+        print(f"{name} seed-{seed}: mean={np.mean(list(accs.values())):.4f} std={np.std(list(accs.values())):.4f}")
 
 print("Done. Results saved to part1/results/")
