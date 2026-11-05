@@ -1,5 +1,5 @@
 """
-Run MLP cross-validation experiments on IMDb for both encoders.
+Run MLP and DeepMLP cross-validation experiments on IMDb for both encoders.
 Designed to run on Snellius. Results saved to part1/results/.
 """
 import sys
@@ -92,6 +92,30 @@ for run, seed in enumerate(my_seeds):
         part1.experiment.cross_validation_experiment(
             my_cross_validation_sets[run], imdb_outcome_space,
             bag_of_words_enc, model_option='mlp', save_to=str(run_folder)
+        )
+    )
+
+print("Running Deep MLP + TokenIndicator...")
+my_classifiers['deep_mlp_indicator-enc'] = []
+for run, seed in enumerate(my_seeds):
+    run_folder = results_folder / f"deep_mlp_indicator-enc/seed-{seed}"
+    my_classifiers['deep_mlp_indicator-enc'].append(
+        part1.experiment.cross_validation_experiment(
+            my_cross_validation_sets[run], imdb_outcome_space,
+            token_indicator_enc, model_option='mlp', save_to=str(run_folder),
+            smlp_args={'model_class': part1.smlp.DeepSparseMLP}
+        )
+    )
+
+print("Running Deep MLP + BagOfWords...")
+my_classifiers['deep_mlp_bow-enc'] = []
+for run, seed in enumerate(my_seeds):
+    run_folder = results_folder / f"deep_mlp_bow-enc/seed-{seed}"
+    my_classifiers['deep_mlp_bow-enc'].append(
+        part1.experiment.cross_validation_experiment(
+            my_cross_validation_sets[run], imdb_outcome_space,
+            bag_of_words_enc, model_option='mlp', save_to=str(run_folder),
+            smlp_args={'model_class': part1.smlp.DeepSparseMLP}
         )
     )
 

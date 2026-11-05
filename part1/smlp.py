@@ -58,6 +58,38 @@ class SparseMLP(nn.Module):
         # logprobs
         return self.output(x)
 
+class DeepSparseMLP(nn.Module):
+    """Two-hidden-layer MLP that accepts sparse input tensors.
+
+    Adds a second hidden layer (dense) with ReLU + dropout to SparseMLP,
+    increasing model capacity for capturing more complex feature interactions.
+    """
+
+    def __init__(self, input_dim, hidden_dim, num_classes, dropout=0.2):
+        super().__init__()
+
+        self.weight = nn.Parameter(torch.empty(input_dim, hidden_dim))
+        self.bias = nn.Parameter(torch.zeros(hidden_dim))
+        nn.init.xavier_uniform_(self.weight)
+
+        self.activation = nn.ReLU()
+        self.dropout = nn.Dropout(dropout)
+
+        self.output = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, num_classes),
+            nn.LogSoftmax(dim=-1),
+        )
+
+    def forward(self, x):
+        x = torch.sparse.mm(x, self.weight) + self.bias
+        x = self.activation(x)
+        x = self.dropout(x)
+        return self.output(x)
+
+
 def scipy_to_torch_sparse(x):
     """Convert a SciPy sparse matrix to a coalesced PyTorch sparse COO tensor.
 
@@ -185,9 +217,10 @@ def evaluate(model, dataloader, criterion, device="cpu"):
         "accuracy": total_correct / total_examples
     }, torch.cat([t.detach().cpu() for t in all_preds]).numpy()
 
-def train_neural_network_model(training_set, validation_set, num_classes, encoder, save_to,   
-                                hidden_dim=128, dropout=0.1, batch_size=64, learning_rate=1e-3, 
-                                weight_decay=1e-4, num_epochs=20, device=torch.device("cpu")):
+def train_neural_network_model(training_set, validation_set, num_classes, encoder, save_to,
+                                hidden_dim=128, dropout=0.1, batch_size=64, learning_rate=1e-3,
+                                weight_decay=1e-4, num_epochs=20, device=torch.device("cpu"),
+                                model_class=None):
     """Encode texts, train SparseMLP, and checkpoint the best validation model.
 
     Inputs: train/val (text, label) pairs, num_classes, encoder (text -> sparse vector), path prefix to save weights,
@@ -245,7 +278,8 @@ def train_neural_network_model(training_set, validation_set, num_classes, encode
         json.dump(args, f, indent=2, ensure_ascii=False)
         
     # Create the model based on the input dimension, chosen hidden dimension, number of classification classes and dropout rate
-    model = SparseMLP(input_dim=len(encoder), hidden_dim=hidden_dim, num_classes=num_classes, dropout=dropout).to(device)
+    cls = model_class if model_class is not None else SparseMLP
+    model = cls(input_dim=len(encoder), hidden_dim=hidden_dim, num_classes=num_classes, dropout=dropout).to(device)
     criterion = nn.NLLLoss() # create the loss function
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay) # create the optimizer
 
