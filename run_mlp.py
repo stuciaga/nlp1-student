@@ -57,6 +57,39 @@ class BagOfWords(part1.clslib.Encoder):
 token_indicator_enc = part1.clslib.TokenIndicator(tokenizer)
 bag_of_words_enc    = BagOfWords(tokenizer)
 
+class tfidf(part1.clslib.Encoder):
+    def __init__(self, tokenizer, training_texts):
+        self.tokenizer = tokenizer
+        self.count_texts = len(training_texts)
+
+        self.df = np.zeros(self.tokenizer.get_vocab_size())
+
+        for i in training_texts:
+            ids = self.tokenizer.encode(i).ids
+            unique = set(ids)
+
+            for j in unique:
+                self.df[j] += 1
+
+        self.idf = []
+        for i in self.df:
+            self.idf.append(np.log(self.count_texts / (1 + i)))
+    
+
+    def __len__(self):
+        return len(self.idf)
+
+    def __call__(self, x: str):
+        id = self.tokenizer.encode(x).ids
+        vector = np.zeros(len(self))
+
+        for tid in id:
+            vector[tid] += 1
+            
+        return vector * self.idf
+
+tfidf_enc    = tfidf(tokenizer, train_texts)
+
 # --- Cross-validation splits ---
 my_seeds = [0]
 num_folds = 5
@@ -95,6 +128,19 @@ for run, seed in enumerate(my_seeds):
         )
     )
 
+
+print("Running tf-idf + BagOfWords...")
+my_classifiers['mlp_tfidf-enc'] = []
+for run, seed in enumerate(my_seeds):
+    run_folder = results_folder / f"mlp_tfidf-enc/seed-{seed}"
+    my_classifiers['mlp_tfidf-enc'].append(
+        part1.experiment.cross_validation_experiment(
+            my_cross_validation_sets[run], imdb_outcome_space,
+            tfidf_enc, model_option='mlp', save_to=str(run_folder)
+        )
+    )
+
+
 print("Running Deep MLP + TokenIndicator...")
 my_classifiers['deep_mlp_indicator-enc'] = []
 for run, seed in enumerate(my_seeds):
@@ -118,6 +164,19 @@ for run, seed in enumerate(my_seeds):
             smlp_args={'model_class': part1.smlp.DeepSparseMLP}
         )
     )
+
+print("Running Deep MLP + tf-idf...")
+my_classifiers['deep_mlp_tfidf-enc'] = []
+for run, seed in enumerate(my_seeds):
+    run_folder = results_folder / f"deep_mlp_tfidf-enc/seed-{seed}"
+    my_classifiers['deep_mlp_tfidf-enc'].append(
+        part1.experiment.cross_validation_experiment(
+            my_cross_validation_sets[run], imdb_outcome_space,
+            tfidf_enc, model_option='mlp', save_to=str(run_folder),
+            smlp_args={'model_class': part1.smlp.DeepSparseMLP}
+        )
+    )
+
 
 # --- Save accuracies to JSON and print summary ---
 import json
