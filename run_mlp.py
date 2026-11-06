@@ -75,16 +75,21 @@ class tfidf(part1.clslib.Encoder):
         for i in self.df:
             self.idf.append(np.log(self.count_texts / (1 + i)))
     
+        self.idf = np.array(self.idf)
 
     def __len__(self):
         return len(self.idf)
 
-    def __call__(self, x: str):
+    def __call__(self, x):
         id = self.tokenizer.encode(x).ids
         vector = np.zeros(len(self))
 
-        for tid in id:
-            vector[tid] += 1
+        for i in id:
+            vector[i] += 1
+
+        total = len(id)
+        if total > 0:
+            vector = vector / total
             
         return vector * self.idf
 
