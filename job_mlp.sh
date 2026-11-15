@@ -2,7 +2,7 @@
 #SBATCH --job-name=nlp1-mlp
 #SBATCH --output=logs/mlp_%j.out
 #SBATCH --error=logs/mlp_%j.err
-#SBATCH --time=01:30:00
+#SBATCH --time=03:00:00
 #SBATCH --partition=gpu_mig
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
