@@ -11,13 +11,20 @@ for project item 2 (embedding exploration).
     model.vocab / model.index(w) / model.word(i)
     model.embed_word(w)        np.ndarray [D]
 """
-
+import numpy as np
 
 def cos_similarity(u, v):
     """
     Return the cosine similarity (a real number) of two embedding vectors u and v.
     """
-    raise NotImplementedError("Implement me!")
+    dot = np.dot(u, v)
+
+    u_len = np.linalg.norm(u) 
+    v_len = np.linalg.norm(v)
+
+    result = dot / (u_len * v_len)
+
+    return result
 
 
 def topk_ids(v, E, k=10):
@@ -29,7 +36,19 @@ def topk_ids(v, E, k=10):
     Return a list with the ids of the k rows of E nearest to v by cosine similarity.
     Hint: normalise E and v, then one matrix-vector product, instead of looping over rows.
     """
-    raise NotImplementedError("Implement me!")
+    v_len = np.linalg.norm(v)
+
+    v_norm = v / v_len
+
+    e_len = np.linalg.norm(E, axis = 1, keepdims = True)
+
+    e_norm = E / e_len
+
+    score = e_norm @ v_norm
+
+    topk = np.argsort(score, axis = -1)[::-1][:k]
+
+    return topk.tolist()
 
 
 def demo_similarity(words, model):
