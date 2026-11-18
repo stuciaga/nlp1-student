@@ -3,7 +3,8 @@ Project item 1 (A): does GloVe Common Crawl 840B/300d fit IMDB?
 
 For several tokenizer settings (lowercase, remove_punct, remove_stopwords) it measures, on cleaned and
 de-duplicated IMDB train text, how much of the text has a pretrained vector:
-  * % of tokens and % of types (distinct words) found in the GloVe vocabulary
+  * % of tokens and % of types (distinct words) found in the GloVe vocabulary, both with a lowercased lookup
+    and "effective" (the lookup the training pipeline really does: no lowercasing of the token)
   * the most frequent out-of-vocabulary types
   * how many negation tokens survive each tokenizer (not, no, nor, never, n't)
 and it probes how GloVe treats punctuation and contractions (tokenizer coherence).
@@ -153,6 +154,10 @@ for cfg in CONFIGS:
     known_tok = sum(k for t, k in c.items() if t.lower() in lower)
     known_typ = sum(1 for t in c if t.lower() in lower)
     exact_tok = sum(k for t, k in c.items() if t in cased)
+    # what the model really sees: BasicTokenizer.ids() does vocab.index(token) with NO lowercasing,
+    # against the lowercased vocabulary, so a capitalised token ("Great") is unknown when lowercase=False
+    eff_tok = sum(k for t, k in c.items() if t in lower)
+    eff_typ = sum(1 for t in c if t in lower)
     rows.append({
         "lowercase": cfg[0], "remove_punct": cfg[1], "remove_stopwords": cfg[2],
         "tokens_per_review": n_tok / n_reviews,
@@ -160,6 +165,8 @@ for cfg in CONFIGS:
         "pct_tokens_in_vocab": 100 * known_tok / n_tok,
         "pct_types_in_vocab": 100 * known_typ / n_typ,
         "pct_tokens_exact_case": 100 * exact_tok / n_tok,
+        "pct_tokens_effective": 100 * eff_tok / n_tok,
+        "pct_types_effective": 100 * eff_typ / n_typ,
         "negations_per_review": sum(c[t] for t in NEGATIONS) / n_reviews,
     })
     oov = Counter({t: k for t, k in c.items() if t.lower() not in lower})
