@@ -86,9 +86,9 @@ Fill in your pick and a one-line reason. If we agree, it's decided. If not, talk
 
 | ID | Question | Options | Suggested | A's pick | P's pick |
 |---|---|---|---|---|---|
-| D2 | Prune the GloVe file to the IMDB vocabulary? | Yes (load the full file once, save a small `.npy` and word list) / No (load all 2.2M words in every job) | Yes: faster jobs, and cheap frozen-vs-trainable runs. About 30 min of work. | | |
+| D2 | Prune the GloVe file to the IMDB vocabulary? | Yes (load the full file once, save a small `.npy` and word list) / No (load all 2.2M words in every job) | Yes: faster jobs, and cheap frozen-vs-trainable runs. About 30 min of work. | Yes: `coverage_imdb.py` already writes the pruned file (105,657 of 149,563 IMDB types, 127 MB, `<unk>` = full-vocabulary mean). Keep the full zip for item 2. | |
 | D5 | LSTM vs GRU, uni- vs bidirectional | LSTM / GRU / bi-LSTM | **Park decides** (she implements it) | n/a | |
-| D8 | Who writes which part of the blog? | By track (own items) / by section | By track, then cross-read | | |
+| D8 | Who writes which part of the blog? | By track (own items) / by section | By track, then cross-read | By track, then cross-read: each writes the sections for their own items. | |
 | D11 | Which extra error-analysis features to add (decide at the end, after looking at errors)? | A adds input features (e.g. unknown-word rate, negation). P adds model features (e.g. probability of the predicted label). | Agree the final list after the first error analysis | | |
 
 ## 3b. Decisions already made
