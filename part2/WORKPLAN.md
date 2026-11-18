@@ -108,6 +108,28 @@ Summary: the foundations (embedding, dataset, seeds, repo, file layout) are sett
 
 ---
 
+## 3c. Status and handoff (A to P), 2026-11-18
+
+**Done by A:** tutorial T1-T5, T8 and T9 (embed-and-pool); project items 1, 2 and 3 (coverage, exploration, IMDB embed-and-pool); input-feature code for 6a.
+
+**Decisions taken while working (P: please confirm or object):**
+| ID | Decision | Evidence |
+|---|---|---|
+| D12 | Tokenizer: lowercase, **no** stopword removal, **no** punctuation removal | The tutorial default (stopwords + punctuation removed) deletes 92% of negations (0.26 vs 3.38 per review); token coverage is 99.55%. `lowercase=False` is harmful because `BasicTokenizer.ids` does not lowercase the lookup. |
+| D13 | Embedding for IMDB: **pruned GloVe 840B/300d** (105,657 words, `<unk>` = full-vocabulary mean). AG News tutorial runs used fasttext because stanford.edu was unreachable. | `part2/results/imdb/embeddings/`, load with `part2.pruned_embeddings.PrunedEmbeddings(folder)`. Created by `coverage_imdb.py` / `job_coverage.sh`. |
+| D14 | A's final embed-and-pool: trainable embeddings, dropout 0, hidden 50, lr 1e-3, wd 1e-4, 20 epochs, seeds 0/3/5, 5 folds | Accuracy 0.8975 (seeds 0.8955, 0.9002, 0.8967). Dropout was the only axis that mattered in the one-axis screen (D4). |
+
+**A's IMDB results (5-fold CV mean accuracy):** frozen pretrained 0.861 (dropout 0; baseline dropout 0.5: 0.825) | trainable pretrained 0.8975 | trainable random init 0.890. Hidden size, learning rate and weight decay are within the fold-to-fold spread (about 0.7 points).
+
+**For P (LSTM track, item 4 and 6b):**
+- Use the same folds and seeds (`part1.experiment.cross_validation_split`, seeds 0/3/5, 5 folds, 20 epochs), the same cleaning and de-duplication, and the same tokenizer and embeddings as above, so the two tracks are comparable.
+- `part2/run_imdb_embpool.py` is a template: copy it, set `enc_type='lstm'` with `enc_kwargs={'hidden_size': ..., 'word_dropout': ...}`, and save to `results/imdb/lstm/`. It writes `accuracies.json` in the Part 1 format and uses a caching tokenizer to avoid re-tokenizing every fold.
+- `part2/features_imdb.py` computes the input features (6a) for any list of reviews; `part2/results/imdb/features_test.csv` holds them for the test set.
+- A's final models (for 6b: predicted label, confidence): `part2/results/imdb/embed-and-pool-trainable/baseline/seed-*/fold-*/model.{json,pt}` in A's Snellius home. `results/` is gitignored, so A copies them to `/scratch-shared` or sends them. Check permissions.
+- Job scripts: `job_imdb_embpool.sh` (GPU) and `job_imdb_embpool_cpu.sh` (rome). `gpu_mig` can queue for a long time; `gpu_a100` and `gpu_h100` usually had free nodes. Trainable embeddings on CPU take about 53 minutes per seed.
+
+**Still open for A:** GloVe vs fasttext on IMDB (downstream), frozen run with 3 seeds, data-size curve, comparison with Part 1, 6a joined with predictions, blog sections for own items.
+
 ## 4. Open questions for the TA
 
 - Is the list of recommended pretrained embedding models posted yet? (`project.ipynb` says "we will post a list".)
