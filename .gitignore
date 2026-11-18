@@ -1,1 +1,10 @@
 part1/results/
+
+# personal oral-exam notes
+part2/A_NOTES.md
+
+# local/generated
+part2/results/
+.idea/
+.ipynb_checkpoints/
+*.zip
