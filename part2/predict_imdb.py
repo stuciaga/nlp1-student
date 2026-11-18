@@ -62,7 +62,8 @@ for model_family, model_data in {"embed-and-pool": "part2/results/imdb/embed-and
         
         for fold in range(5):            
             # load our model
-            trained_nn = part2.experiment.load(f"{model_data}/seed-{seed}/fold-{fold}/model", emb_model)
+            trained_nn = part2.experiment.load(f"{model_data}/seed-{seed}/fold-{fold}/model", emb_model, device='cuda')
+
             # test it on the devtest
             logprobs = part2.experiment.predict_logprobs(
                 trained_nn, 
