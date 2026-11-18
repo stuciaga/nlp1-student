@@ -6,6 +6,7 @@ Designed for Snellius (GPU). Results go to part2/results/agnews/embed-and-pool/s
 Prepare on the login node first (downloads need internet): see prep_agnews.sh.
 """
 import argparse
+import json
 import sys
 import time
 from pathlib import Path
@@ -59,7 +60,7 @@ for seed in args.seeds:
     run_folder = f"{results_folder}/embed-and-pool/seed-{seed}"
     print(f"=== seed {seed} -> {run_folder}", flush=True)
     t0 = time.time()
-    part2.experiment.cross_validation(
+    out = part2.experiment.cross_validation(
         outcome_space=outcome_space,
         data_splits=splits,
         tokenizer=tokenizer_for_bow,
@@ -71,6 +72,8 @@ for seed in args.seeds:
         device=args.device,
         save_to=run_folder,
     )
+    with open(f"{run_folder}/accuracies.json", "w") as f:  # same format as Part 1 / run_imdb_embpool.py
+        json.dump({int(k): float(v) for k, v in out["accuracies"].items()}, f, indent=1)
     print(f"seed {seed} done in {(time.time() - t0) / 60:.1f} min", flush=True)
 
 print("All seeds done.", flush=True)

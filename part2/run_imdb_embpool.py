@@ -17,6 +17,7 @@ import sys
 import time
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 root = Path(__file__).resolve().parent.parent
@@ -30,7 +31,8 @@ from part2.pruned_embeddings import PrunedEmbeddings  # noqa: E402
 here = Path(__file__).resolve().parent
 parser = argparse.ArgumentParser()
 parser.add_argument("--emb-dir", default=str(here / "results" / "imdb" / "embeddings"))
-parser.add_argument("--results", default=str(here / "results" / "imdb" / "embed-and-pool"))
+parser.add_argument("--results", default=None,
+                    help="default: results/imdb/embed-and-pool (or embed-and-pool-random-init with --random-init)")
 parser.add_argument("--seeds", type=int, nargs="+", default=[0])
 parser.add_argument("--folds", type=int, default=5)
 parser.add_argument("--epochs", type=int, default=20)
@@ -48,6 +50,8 @@ parser.add_argument("--wd", type=float, default=1e-4)
 parser.add_argument("--batch-size", type=int, default=64)
 parser.add_argument("--trainable", action="store_true", help="fine-tune the embeddings (default: frozen)")
 parser.add_argument("--sum-pool", action="store_true", help="sum instead of mean pooling")
+parser.add_argument("--random-init", action="store_true",
+                    help="replace the pretrained matrix by a random trainable one of the same shape and scale (implies --trainable)")
 # one-axis sweep
 parser.add_argument("--axis", choices=["hidden", "dropout", "lr", "wd"], default=None)
 parser.add_argument("--values", type=float, nargs="+", default=[])
@@ -77,6 +81,17 @@ class CachingTokenizer:
 
 print("Loading embeddings and IMDB ...", flush=True)
 emb_model = PrunedEmbeddings(args.emb_dir)
+pretrained_vectors = emb_model.vectors.copy()
+
+
+def random_vectors(seed):
+    """Random N(0, std) matrix with the pretrained matrix's shape and overall scale; <pad> stays zero."""
+    r = np.random.RandomState(seed)
+    m = r.normal(0.0, pretrained_vectors[2:].std(), size=pretrained_vectors.shape).astype(np.float32)
+    m[0] = 0.0
+    return m
+
+
 tokenizer = CachingTokenizer(part2.clslib.BasicTokenizer(
     lowercase=True, remove_punct=args.remove_punct, remove_stopwords=args.remove_stopwords,
     language="english", vocab=emb_model.vocab,
@@ -98,7 +113,9 @@ else:
     caster = int if args.axis == "hidden" else float
     configs = [(f"{args.axis}-{v:g}", {**base, args.axis: caster(v)}) for v in args.values]
 
-results_folder = Path(args.results)
+default_results = here / "results" / "imdb" / ("embed-and-pool-random-init" if args.random_init else "embed-and-pool")
+results_folder = Path(args.results) if args.results else default_results
+trainable = args.trainable or args.random_init
 for tag, hp in configs:
     for seed in args.seeds:
         run_folder = results_folder / tag / f"seed-{seed}"
@@ -106,13 +123,15 @@ for tag, hp in configs:
         print(f"=== {tag} seed {seed}: {hp}", flush=True)
         t0 = time.time()
         splits = part1.experiment.cross_validation_split(pairs=pairs, k=args.folds, seed=seed)
+        if args.random_init:
+            emb_model.vectors = random_vectors(seed)  # a different random matrix per seed
         out = part2.experiment.cross_validation(
             outcome_space=outcome_space,
             data_splits=splits,
             tokenizer=tokenizer,
             emb_model=emb_model,
             enc_type="embed-and-pool",
-            enc_kwargs={"freeze_embeddings": not args.trainable, "average_pool": not args.sum_pool},
+            enc_kwargs={"freeze_embeddings": not trainable, "average_pool": not args.sum_pool},
             regressor_kwargs={"hidden_size1": hp["hidden"], "hidden_size2": hp["hidden"], "dropout": hp["dropout"]},
             opt_kwargs={"learning_rate": hp["lr"], "weight_decay": hp["wd"],
                         "batch_size": args.batch_size, "num_epochs": args.epochs},
