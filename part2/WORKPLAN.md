@@ -113,6 +113,7 @@ Summary: the foundations (embedding, dataset, seeds, repo, file layout) are sett
 **Done by A:** tutorial T1-T5, T8 and T9 (embed-and-pool); project items 1, 2 and 3 (coverage, exploration, IMDB embed-and-pool); input-feature code for 6a.
 
 **Decisions taken while working (P: please confirm or object):**
+
 | ID | Decision | Evidence |
 |---|---|---|
 | D12 | Tokenizer: lowercase, **no** stopword removal, **no** punctuation removal | The tutorial default (stopwords + punctuation removed) deletes 92% of negations (0.26 vs 3.38 per review); token coverage is 99.55%. `lowercase=False` is harmful because `BasicTokenizer.ids` does not lowercase the lookup. |
@@ -122,6 +123,7 @@ Summary: the foundations (embedding, dataset, seeds, repo, file layout) are sett
 **A's IMDB results (5-fold CV mean accuracy):** frozen pretrained 0.861 (dropout 0; baseline dropout 0.5: 0.825) | trainable pretrained 0.8975 | trainable random init 0.890. Hidden size, learning rate and weight decay are within the fold-to-fold spread (about 0.7 points).
 
 **For P (LSTM track, item 4 and 6b):**
+
 - **Pruned embeddings:** copy `/scratch-shared/scur0788/nlp1/pruned` into `part2/results/imdb/embeddings/` (or regenerate with `sbatch job_coverage.sh` after downloading the GloVe zip, see section 0). Without them `PrunedEmbeddings` cannot load.
 - Use the same folds and seeds (`part1.experiment.cross_validation_split`, seeds 0/3/5, 5 folds, 20 epochs), the same cleaning and de-duplication, and the same tokenizer and embeddings as above, so the two tracks are comparable.
 - `part2/run_imdb_embpool.py` is a template: copy it, set `enc_type='lstm'` with `enc_kwargs={'hidden_size': ..., 'word_dropout': ...}`, and save to `results/imdb/lstm/`. It writes `accuracies.json` in the Part 1 format and uses a caching tokenizer to avoid re-tokenizing every fold.
