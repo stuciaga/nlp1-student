@@ -8,11 +8,11 @@ Legend: **A** = you, **P** = Park. ⚖️ = **joint decision**, so discuss and a
 
 | Issue | What to do |
 |---|---|
-| `from part2 import solutions` does not exist in the repo. The tutorial's `analyse_embs`, `demo_similarity`, `demo_topk` and `demo_analogy` cells will just print "You need your own implementation". | **This is part of the assignment.** We write `part2/solutions.py` ourselves, split as in section 1b. |
-| Tutorial bug: cell `rm00 = ...` computes `rm00_dt_logprobs` with **`em00`** (the embed-and-pool model), not `rm00`. | Fix to `rm00` before trusting the LSTM classification report. |
+| `from part2 import solutions` was missing. | **Done:** `part2/solutions.py` re-exports `solutions_a.py` and `solutions_p.py`, so the notebook cells work unchanged. A's `analyse_embs` is implemented. P's `cos_similarity` and `topk_ids` are done; `demo_similarity`, `demo_topk` and `demo_analogy` are still stubs. |
+| Tutorial bug: cell `rm00 = ...` computed `rm00_dt_logprobs` with `em00`. | **Fixed** in the notebook (change `em00` to `rm00` if you work from an older copy). |
 | `device='cuda'` is hardcoded in the training cells. | Fine as is: we run training on Snellius (`job_mlp.sh` style). No change needed. |
 | `my_seeds = [0]` and `num_folds = 5` by default. | D3 is decided: seeds `[0, 3, 5]`, 5 folds, 20 epochs. Set `my_seeds` accordingly. |
-| GloVe download: the tutorial fetches `glove.2024.wikigiga.50d.zip` (50-d). | D1 is decided: we use GloVe Common Crawl 300d, so add a branch for it in `download_pretrained` (see D2 on pruning). |
+| GloVe download: the tutorial fetches the 50-d file. | D1 is decided (GloVe Common Crawl 300d). stanford.edu was down, so use the Hugging Face mirror `https://huggingface.co/stanfordnlp/glove/resolve/main/glove.840B.300d.zip` (2.1 GB). A put it in `/scratch-shared/scur0788/nlp1/`. No `download_pretrained` branch is needed: `coverage_imdb.py` reads the zip directly. |
 
 ---
 
@@ -101,7 +101,7 @@ Fill in your pick and a one-line reason. If we agree, it's decided. If not, talk
 | D4 | Hyperparameter search | **One axis at a time** (1 seed, 5 folds) to screen, then confirm the best settings with 3 seeds. A full grid is too expensive, and the tutorial advises structuring the search. |
 | D6 | Error-analysis features (baseline) | **The tutorial's set:** predicted label (one-hot) plus `lexicon_count`, `flesch_reading_ease`, `reading_time`, `flesch_kincaid_grade`. |
 | D7 | Repo workflow | **Both push to `stuciaga/nlp1-student`.** `git pull` before every push, commit in small pieces, stay in your own files. |
-| D9 | Layout of `solutions.py` | **Separate files** (`solutions_a.py`, `solutions_p.py`), combined into `solutions.py` at the end. |
+| D9 | Layout of `solutions.py` | **Separate files** (`solutions_a.py`, `solutions_p.py`); `solutions.py` re-exports both (done), so no merging of code is needed. |
 | D10 | Dataset and task | **IMDB from Project 1.** Anything from `part1/` can be reused, and its results are the baseline for item 3. |
 
 Summary: the foundations (embedding, dataset, seeds, repo, file layout) are settled, so both of us can start now. Open items are about time budget and write-up, not blockers.
@@ -122,6 +122,7 @@ Summary: the foundations (embedding, dataset, seeds, repo, file layout) are sett
 **A's IMDB results (5-fold CV mean accuracy):** frozen pretrained 0.861 (dropout 0; baseline dropout 0.5: 0.825) | trainable pretrained 0.8975 | trainable random init 0.890. Hidden size, learning rate and weight decay are within the fold-to-fold spread (about 0.7 points).
 
 **For P (LSTM track, item 4 and 6b):**
+- **Pruned embeddings:** copy `/scratch-shared/scur0788/nlp1/pruned` into `part2/results/imdb/embeddings/` (or regenerate with `sbatch job_coverage.sh` after downloading the GloVe zip, see section 0). Without them `PrunedEmbeddings` cannot load.
 - Use the same folds and seeds (`part1.experiment.cross_validation_split`, seeds 0/3/5, 5 folds, 20 epochs), the same cleaning and de-duplication, and the same tokenizer and embeddings as above, so the two tracks are comparable.
 - `part2/run_imdb_embpool.py` is a template: copy it, set `enc_type='lstm'` with `enc_kwargs={'hidden_size': ..., 'word_dropout': ...}`, and save to `results/imdb/lstm/`. It writes `accuracies.json` in the Part 1 format and uses a caching tokenizer to avoid re-tokenizing every fold.
 - `part2/features_imdb.py` computes the input features (6a) for any list of reviews; `part2/results/imdb/features_test.csv` holds them for the test set.
