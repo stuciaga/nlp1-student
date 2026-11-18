@@ -8,3 +8,5 @@ part2/results/
 .idea/
 .ipynb_checkpoints/
 *.zip
+__pycache__/
+logs/
