@@ -133,6 +133,13 @@ Summary: the foundations (embedding, dataset, seeds, repo, file layout) are sett
 
 **Still open for A:** GloVe vs fasttext on IMDB (downstream), frozen run with 3 seeds, data-size curve, comparison with Part 1, 6a joined with predictions, blog sections for own items.
 
+## 3d. Change of plan, 2026-11-19 (agreed by P's message)
+
+- **A does all remaining coding and Snellius runs** (item 4 loose ends if any, item 5 protocol and plots, 6a and 6b joins, BDA run, T10, A's open item 3 runs).
+- **P makes all the slides** (from 2026-11-20); P will not run anything from now on. P's LSTM and prediction runs are considered done.
+- A therefore needs from P: LSTM `accuracies.json` files and models, `predictions_test.csv` (copied to `/scratch-shared/scur0821/` with `chmod o+x`), her `collect_results.py` output, and her answers on D5 (the code is a unidirectional one-layer LSTM), D12 to D14, plus any LSTM findings (she reports that the LSTM overfits).
+- Slide numbers come from the `accuracies.json` files, not from the text in this file.
+
 ## 4. Open questions for the TA
 
 - Is the list of recommended pretrained embedding models posted yet? (`project.ipynb` says "we will post a list".)

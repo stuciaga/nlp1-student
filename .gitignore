@@ -10,3 +10,4 @@ part2/results/
 *.zip
 __pycache__/
 logs/
+part2/CONTINUE_A.md
