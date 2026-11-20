@@ -8,7 +8,7 @@ Legend: **A** = you, **P** = Park. ⚖️ = **joint decision**, so discuss and a
 
 | Issue | What to do |
 |---|---|
-| `from part2 import solutions` was missing. | **Done:** `part2/solutions.py` re-exports `solutions_a.py` and `solutions_p.py`, so the notebook cells work unchanged. A's `analyse_embs` is implemented. P's `cos_similarity` and `topk_ids` are done; `demo_similarity`, `demo_topk` and `demo_analogy` are still stubs. |
+| `from part2 import solutions` was missing. | **Done:** `part2/solutions.py` holds all the exercise functions (A's and P's in one file), so the notebook cells work unchanged. A's `analyse_embs` is implemented. P's `cos_similarity` and `topk_ids` are done; `demo_similarity`, `demo_topk` and `demo_analogy` are still stubs. |
 | Tutorial bug: cell `rm00 = ...` computed `rm00_dt_logprobs` with `em00`. | **Fixed** in the notebook (change `em00` to `rm00` if you work from an older copy). |
 | `device='cuda'` is hardcoded in the training cells. | Fine as is: we run training on Snellius (`job_mlp.sh` style). No change needed. |
 | `my_seeds = [0]` and `num_folds = 5` by default. | D3 is decided: seeds `[0, 3, 5]`, 5 folds, 20 epochs. Set `my_seeds` accordingly. |
@@ -39,9 +39,9 @@ The tutorial imports `part2/solutions.py`, which isn't in the repo, so we write 
 
 | Function | Owner | File |
 |---|---|---|
-| `analyse_embs` (do positive and negative words separate in embedding space?) | A | `solutions_a.py` |
-| `cos_similarity`, `topk_ids` (the notebook's stubs) | P | `solutions_p.py` |
-| `demo_similarity`, `demo_topk`, `demo_analogy` | P | `solutions_p.py` |
+| `analyse_embs` (do positive and negative words separate in embedding space?) | A | `solutions.py` |
+| `cos_similarity`, `topk_ids` (the notebook's stubs) | P | `solutions.py` |
+| `demo_similarity`, `demo_topk`, `demo_analogy` | P | `solutions.py` |
 
 ---
 
@@ -101,7 +101,7 @@ Fill in your pick and a one-line reason. If we agree, it's decided. If not, talk
 | D4 | Hyperparameter search | **One axis at a time** (1 seed, 5 folds) to screen, then confirm the best settings with 3 seeds. A full grid is too expensive, and the tutorial advises structuring the search. |
 | D6 | Error-analysis features (baseline) | **The tutorial's set:** predicted label (one-hot) plus `lexicon_count`, `flesch_reading_ease`, `reading_time`, `flesch_kincaid_grade`. |
 | D7 | Repo workflow | **Both push to `stuciaga/nlp1-student`.** `git pull` before every push, commit in small pieces, stay in your own files. |
-| D9 | Layout of `solutions.py` | **Separate files** (`solutions_a.py`, `solutions_p.py`); `solutions.py` re-exports both (done), so no merging of code is needed. |
+| D9 | Layout of `solutions.py` | **One file** `solutions.py` (A's `analyse_embs`, P's similarity functions). It was first split into `solutions_a.py` and `solutions_p.py` and merged on 2026-11-21. |
 | D10 | Dataset and task | **IMDB from Project 1.** Anything from `part1/` can be reused, and its results are the baseline for item 3. |
 
 Summary: the foundations (embedding, dataset, seeds, repo, file layout) are settled, so both of us can start now. Open items are about time budget and write-up, not blockers.
