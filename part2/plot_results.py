@@ -28,6 +28,7 @@ SYSTEMS = {
     "EP trainable d0": imdb / "embed-and-pool-trainable" / "baseline",
     "LSTM frozen d0.5": imdb / "lstm" / "baseline",
     "LSTM trainable d0": imdb / "lstm-trainable-d0" / "baseline",
+    "EP trainable d0 fasttext": imdb / "embed-and-pool-trainable-fasttext" / "baseline",
 }
 for d in sorted(part1.glob("*-enc")):
     SYSTEMS[f"P1 {d.name.replace('-enc', '')}"] = d
@@ -90,3 +91,24 @@ if rows:
     print("saved", out / "data_size.png")
 else:
     print("skip data-size plot (no size-* results yet)")
+
+# LSTM screen (1 seed, one axis at a time from the frozen baseline hidden 100, word dropout 0.1)
+SCREEN = {
+    "hidden 50": imdb / "lstm-screen" / "hidden-50" / "baseline",
+    "hidden 100 (baseline)": imdb / "lstm" / "baseline",
+    "hidden 200": imdb / "lstm-screen" / "hidden-200" / "baseline",
+    "word dropout 0": imdb / "lstm-screen" / "worddrop-0" / "baseline",
+    "word dropout 0.1 (baseline)": imdb / "lstm" / "baseline",
+    "word dropout 0.3": imdb / "lstm-screen" / "worddrop-0.3" / "baseline",
+}
+rows = []
+for label, folder in SCREEN.items():
+    f = Path(folder) / "seed-0" / "accuracies.json"
+    if f.exists():
+        rows += [{"setting": label, "fold": int(k), "accuracy": float(v)} for k, v in json.loads(f.read_text()).items()]
+if rows:
+    sc = pd.DataFrame(rows)
+    sc.to_csv(out / "lstm_screen.csv", index=False)
+    print(sc.groupby("setting")["accuracy"].agg(["mean", "std", "count"]).round(4).to_string())
+else:
+    print("skip LSTM screen (no lstm-screen results yet)")

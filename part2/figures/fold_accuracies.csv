@@ -89,6 +89,21 @@ LSTM trainable d0,5,1,0.8729170849227063
 LSTM trainable d0,5,2,0.8815261044176707
 LSTM trainable d0,5,3,0.8905622489959839
 LSTM trainable d0,5,4,0.8867469879518072
+EP trainable d0 fasttext,0,0,0.8869704878538446
+EP trainable d0 fasttext,0,1,0.8952017667135114
+EP trainable d0 fasttext,0,2,0.8917670682730924
+EP trainable d0 fasttext,0,3,0.8985943775100401
+EP trainable d0 fasttext,0,4,0.8897590361445783
+EP trainable d0 fasttext,3,0,0.8911865087331861
+EP trainable d0 fasttext,3,1,0.8986147359967878
+EP trainable d0 fasttext,3,2,0.9024096385542169
+EP trainable d0 fasttext,3,3,0.8927710843373494
+EP trainable d0 fasttext,3,4,0.8885542168674698
+EP trainable d0 fasttext,5,0,0.9010238907849829
+EP trainable d0 fasttext,5,1,0.8855651475607308
+EP trainable d0 fasttext,5,2,0.8959839357429719
+EP trainable d0 fasttext,5,3,0.8959839357429719
+EP trainable d0 fasttext,5,4,0.8953815261044177
 P1 deep_mlp_bow,0,0,0.8347721341096166
 P1 deep_mlp_bow,0,1,0.8265408552499498
 P1 deep_mlp_bow,0,2,0.8253012048192772
