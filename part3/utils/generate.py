@@ -5,17 +5,25 @@ import argparse
 import os
 import json
 import random
+import time
 from transformers import AutoTokenizer, AutoModelForCausalLM, set_seed
 from peft import PeftModel
 from tqdm import tqdm
 
+from prompts import (build_instruction, format_demos, invalid_rate,
+                     parse_generated_string as _parse)
+
 class Generation:
     def __init__(self, model_name: str, device: str, 
-                max_new_tokens: int = 300, use_bf16: bool = True, adapter_path: str = None):
+                max_new_tokens: int = 8, use_bf16: bool = True, adapter_path: str = None,
+                max_review_tokens: int = None):
         
         self.device = device
         self.max_new_tokens = max_new_tokens
         self.adapter_path = adapter_path
+        self.max_review_tokens = max_review_tokens
+        self.n_truncated = 0  # reviews cut to max_review_tokens
+        self.n_seen = 0
         self.tokenizer, self.model = self._load_tokenizer_and_model(
             model_name, use_bf16=use_bf16 and self.device == "cuda", adapter_path=adapter_path
         )
@@ -52,7 +60,18 @@ class Generation:
         model.to(self.device)
         return tokenizer, model
 
+    def _truncate(self, question: str) -> str:
+        self.n_seen += 1
+        if self.max_review_tokens is None:
+            return question
+        ids = self.tokenizer(question, add_special_tokens=False)["input_ids"]
+        if len(ids) <= self.max_review_tokens:
+            return question
+        self.n_truncated += 1
+        return self.tokenizer.decode(ids[: self.max_review_tokens])
+
     def _prompt_ids(self, question: str, instruction: str) -> list:
+        question = self._truncate(question)
         messages = [
             {"role": "system", "content": instruction},
             {"role": "user", "content": f"Input: {question}\nAnswer:"},
@@ -168,141 +187,79 @@ class Generation:
             grouped.append(generated_strings[start : start + num_return_sequences])
         return generated_tokens, grouped
 
-def parse_generated_string(generated_string: str) -> int:
-    if "A" in generated_string:
-        return 0
-    elif "B" in generated_string:
-        return 1
-    elif "C" in generated_string:
-        return 2
-    elif "D" in generated_string:
-        return 3
-    else:
-        return -1
+def parse_generated_string(generated_string: str, order=("negative", "positive")) -> int:
+    """Binary parser (0 negative / 1 positive / -1 invalid). See prompts.py."""
+    return _parse(generated_string, order)
+
+
+def sample_demos(train, k_per_class: int, rng: random.Random):
+    """k balanced demos per class, shuffled (demo choice/order ablation uses --seed)."""
+    demos = []
+    for label in (0, 1):
+        pool = [x for x in train if x[1] == label]
+        demos += rng.sample(pool, k_per_class)
+    rng.shuffle(demos)
+    return demos
 
 
 if __name__ == "__main__":
-    # Parse arguments
-    args = argparse.ArgumentParser()
-    args.add_argument("--fold", type=int, default=None)
-    args.add_argument("--instruction_type", type=str, default="0-shot", choices=["0-shot", "few-shot"])
-    args.add_argument("--device", type=str, default="cuda")
-    args.add_argument("--model_name", type=str, default="qwen-0.5b-instruct", choices=["qwen-0.5b-instruct", "llama-3b-instruct", "qwen-0.5b-instruct-ft-lora"])
-    args.add_argument("--input_path", type=str, default="/home/eilia/nlp1/part3/data/cross_validation_sets.pkl")
-    args.add_argument("--output_path", type=str, default="/home/eilia/nlp1/part3/predictions")
-    args.add_argument("--seed", type=int, default=0)
-    args.add_argument("--adapter_path", type=str, default=None)
-    args.add_argument("--num_examples_per_class", type=int, default=1)
-    args.add_argument("--batch_size", type=int, default=16)
-    args = args.parse_args()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--fold", type=int, default=None)
+    ap.add_argument("--cv_run", type=int, default=0, help="index into pickle list = which CV seed (0,3,5)")
+    ap.add_argument("--instruction_type", type=str, default="0-shot", choices=["0-shot", "few-shot"])
+    ap.add_argument("--instruction_id", type=int, default=0, help="wording variant, see prompts.INSTRUCTIONS")
+    ap.add_argument("--label_order", type=str, default="negative,positive",
+                    help="which label gets letter A first; 'positive,negative' = permutation stress test")
+    ap.add_argument("--device", type=str, default="cuda")
+    ap.add_argument("--model_name", type=str, default="qwen-0.5b-instruct",
+                    choices=["qwen-0.5b-instruct", "llama-3b-instruct", "qwen-0.5b-instruct-ft-lora"])
+    ap.add_argument("--input_path", type=str, default="part3/data/cross_validation_sets.pkl",
+                    help="CV pickle, or a robustness pickle holding a list of (text, label)")
+    ap.add_argument("--demo_path", type=str, default="part3/data/cross_validation_sets.pkl",
+                    help="CV pickle that few-shot demos are drawn from (fold --fold, default 0)")
+    ap.add_argument("--output_path", type=str, default="part3/predictions")
+    ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--adapter_path", type=str, default=None)
+    ap.add_argument("--num_examples_per_class", type=int, default=1)
+    ap.add_argument("--batch_size", type=int, default=16)
+    ap.add_argument("--temperature", type=float, default=0.0, help="0 = greedy; >0 = sampling")
+    ap.add_argument("--top_p", type=float, default=1.0)
+    ap.add_argument("--subsample", type=int, default=None, help="fixed subsample of N reviews per fold")
+    ap.add_argument("--max_review_tokens", type=int, default=512, help="truncate reviews; count is logged")
+    args = ap.parse_args()
 
-    random.seed(args.seed)
+    rng = random.Random(args.seed)
+    order = tuple(args.label_order.split(","))
+    base_instruction = build_instruction(args.instruction_id, order)
 
-    # Load cross validation sets
     with open(args.input_path, "rb") as f:
-        sets = pickle.load(f)
-    
+        data_in = pickle.load(f)
+    robustness = not (isinstance(data_in, list) and data_in and isinstance(data_in[0], dict))
     original_model_name = args.model_name.split("-ft")[0]
-
-    instruction = """You are a bot that predicts the category of a news article. 
-            The options are: (A) World, (B) Sports, (C) Business, (D) Science/Technology. 
-            Just respond with the letter of the category (A/B/C/D)."""
-    if args.instruction_type == "few-shot":
-        # We use 1 sampled instance from each class from the training set to create the few-shot examples
-        examples_folds = {}
-        for fold, data in sets[0].items():
-            #We randomly choose examples from each class from the training set to create the few-shot examples
-            examples_text = "Here are some examples of inputs and outputs:\n"
-            examples = data["training"]
-            
-            #Sample 1 example from each class
-            gold_labels = [x[1] for x in examples]
-            unique_labels = list(set(gold_labels))
-            # Match instruction / user turn / fine-tuning: Answer: + letter A/B/C/D
-            map_label_to_letter = {0: "A", 1: "B", 2: "C", 3: "D"}
-            for l in unique_labels:
-                index_for_class = [i for i, x in enumerate(gold_labels) if x == l]   
-                chosen_index = random.sample(index_for_class, args.num_examples_per_class)
-                letter = map_label_to_letter[l]
-                examples_text += f"Input: {examples[chosen_index[0]][0]}\nAnswer: {letter}\n"
-            
-            examples_folds[fold] = instruction + examples_text
-            print(examples_folds)
-    elif args.instruction_type != "0-shot":
-        raise ValueError(f"Instruction type {args.instruction_type} not found")
-
     os.makedirs(args.output_path, exist_ok=True)
 
-    def generate_predictions(gen, data, save_data_dict, fold: int, instruction: str, seed: int, batch_size: int):
-        save_data_dict[fold] = {}
-        data = list(data)
-        n = len(data)
+    def load_cv(path):
+        with open(path, "rb") as f:
+            return pickle.load(f)[args.cv_run]
 
-        # Pass 1: batched greedy decoding
-        for start in tqdm(range(0, n, batch_size), desc=f"fold {fold} greedy"):
-            batch = data[start : start + batch_size]
-            sentences = [s for s, _ in batch]
-            labels = [l for _, l in batch]
-
-            _, generated_strings = gen.generate_greedy_batch(sentences, instruction)
-
-            for offset, (sentence, label, generated_string) in enumerate(
-                zip(sentences, labels, generated_strings)
-            ):
-                idx = start + offset
-                save_data_dict[fold][idx] = {
-                    "sentence": sentence,
-                    "generated_string": generated_string,
-                    "predicted_label": parse_generated_string(generated_string),
-                    "label": label,
-                }
-
-        # Pass 2: batched sampling retries for invalid predictions
-        for try_count in range(3):
-            failed_idxs = [
-                i for i in range(n)
-                if save_data_dict[fold][i]["predicted_label"] == -1
-            ]
-            if not failed_idxs:
-                break
-
-            for start in tqdm(
-                range(0, len(failed_idxs), batch_size),
-                desc=f"fold {fold} retry {try_count + 1}",
-            ):
-                batch_idxs = failed_idxs[start : start + batch_size]
-                sentences = [save_data_dict[fold][i]["sentence"] for i in batch_idxs]
-
-                _, generated_strings = gen.generate_samples_batch(
-                    sentences,
-                    instruction,
-                    num_return_sequences=1,
-                    seed=(seed + try_count),
-                )
-
-                for i, generated_string in zip(batch_idxs, generated_strings):
-                    save_data_dict[fold][i]["generated_string"] = generated_string
-                    save_data_dict[fold][i]["predicted_label"] = parse_generated_string(
-                        generated_string
-                    )
-        
-        #Save the predictions for fold
-        with open(os.path.join(args.output_path, f"{args.model_name}_{args.instruction_type}_{fold}.json"), "w") as f:
-            # JSON keys must be strings
-            json.dump({str(k): v for k, v in save_data_dict[fold].items()}, f, indent=4)
-
-    predictions = {}
+    def make_instruction(train):
+        if args.instruction_type == "0-shot":
+            return base_instruction
+        demos = sample_demos(train, args.num_examples_per_class, rng)
+        return base_instruction + "\n" + format_demos(demos, order)
 
     def resolve_adapter_path(fold):
-        # Base models ignore adapters; only FT LoRA needs a fold-specific path.
         if "ft-lora" not in args.model_name:
             return None
         if args.adapter_path is None:
             raise ValueError("--adapter_path is required when using a fine-tuned LoRA model")
         return f"{args.adapter_path}/{original_model_name}-fold-{fold}/lora-adapter"
 
+    def new_gen(fold):
+        return Generation(args.model_name, device=args.device, adapter_path=resolve_adapter_path(fold),
+                          max_review_tokens=args.max_review_tokens)
+
     def free_generation(gen):
-        # Drop model/tokenizer refs so the next fold can load without OOM.
         if gen is None:
             return
         del gen.model
@@ -310,57 +267,65 @@ if __name__ == "__main__":
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-    if "paraphrases" in args.input_path:
-        #For the purposes of the paraphrasing analysis experiment
-        fold = args.input_path.split("/")[-2]
-        
-        # Initialize generation (use fold from input path, same as predictions key)
-        gen = Generation(
-            args.model_name, device=args.device, adapter_path=resolve_adapter_path(fold)
-        )
+    def decode(gen, sentences, instruction):
+        if args.temperature > 0:
+            return gen.generate_samples_batch(sentences, instruction, seed=args.seed,
+                                              temperature=args.temperature, top_p=args.top_p)[1]
+        return gen.generate_greedy_batch(sentences, instruction)[1]
 
-        if args.instruction_type == "few-shot":
-            instruction = examples_folds[fold]
-        else:
-            instruction = instruction
-        generate_predictions(gen, sets, predictions, fold, instruction, seed=args.seed, batch_size=args.batch_size)
+    def generate_predictions(gen, data, name, instruction):
+        data = list(data)
+        if args.subsample is not None:  # fixed subsample: same reviews for every config
+            data = random.Random(1234).sample(data, min(args.subsample, len(data)))
+        n, res = len(data), {}
+        gen.n_truncated = gen.n_seen = 0
+        t0 = time.time()
+        for start in tqdm(range(0, n, args.batch_size), desc=str(name)):
+            batch = data[start:start + args.batch_size]
+            outs = decode(gen, [s for s, _ in batch], instruction)
+            for off, ((sentence, label), out) in enumerate(zip(batch, outs)):
+                res[start + off] = {"sentence": sentence, "generated_string": out,
+                                    "predicted_label": parse_generated_string(out, order), "label": label}
+        # Retry invalid outputs with sampling (kept from the tutorial); first-pass rate is logged
+        first_invalid = invalid_rate([r["predicted_label"] for r in res.values()])
+        for t in range(3):
+            bad = [i for i in range(n) if res[i]["predicted_label"] == -1]
+            if not bad:
+                break
+            for start in range(0, len(bad), args.batch_size):
+                idx = bad[start:start + args.batch_size]
+                outs = gen.generate_samples_batch([res[i]["sentence"] for i in idx], instruction,
+                                                  seed=args.seed + t)[1]
+                for i, out in zip(idx, outs):
+                    res[i]["generated_string"] = out
+                    res[i]["predicted_label"] = parse_generated_string(out, order)
+        final_invalid = invalid_rate([r["predicted_label"] for r in res.values()])
+        acc = sum(r["predicted_label"] == r["label"] for r in res.values()) / n
+        stats = {"name": name, "n": n, "accuracy": acc, "invalid_first_pass": first_invalid,
+                 "invalid_final": final_invalid, "truncated": gen.n_truncated, "seen": gen.n_seen,
+                 "gpu_minutes": (time.time() - t0) / 60,
+                 "peak_mem_gb": torch.cuda.max_memory_allocated() / 1e9 if torch.cuda.is_available() else 0.0}
+        print(json.dumps(stats))
+        tag = f"{args.model_name}_{args.instruction_type}_{name}"
+        with open(os.path.join(args.output_path, f"{tag}.json"), "w") as f:
+            json.dump({str(k): v for k, v in res.items()}, f, indent=4)
+        with open(os.path.join(args.output_path, f"{tag}.stats.json"), "w") as f:
+            json.dump({**stats, "args": vars(args)}, f, indent=4)
+
+    if robustness:
+        # Model-free datasets (OOD, paraphrase, stress): list of (text, label); named after the file
+        demo_fold = args.fold if args.fold is not None else 0
+        instruction = make_instruction(load_cv(args.demo_path)[demo_fold]["training"]) \
+            if args.instruction_type == "few-shot" else base_instruction
+        gen = new_gen(demo_fold)
+        generate_predictions(gen, data_in, os.path.splitext(os.path.basename(args.input_path))[0], instruction)
     else:
-        if args.fold is None:
-            # pickle layout: [ {fold: {"training": ..., "validation": ...}, ...} ]
-            gen = None
-            for fold, data in tqdm(sets[0].items()):
-                # FT LoRA: one adapter per fold. Base model: load once and reuse.
-                if gen is None or "ft-lora" in args.model_name:
-                    free_generation(gen)
-                    gen = Generation(
-                        args.model_name,
-                        device=args.device,
-                        adapter_path=resolve_adapter_path(fold),
-                    )
-
-                if args.instruction_type == "few-shot":
-                    fold_instruction = examples_folds[fold]
-                else:
-                    fold_instruction = instruction
-                generate_predictions(
-                    gen, data["validation"], predictions, fold, fold_instruction,
-                    seed=args.seed, batch_size=args.batch_size,
-                )
-            free_generation(gen)
-        else:
-            if args.instruction_type == "few-shot":
-                instruction = examples_folds[args.fold]
-            else:
-                instruction = instruction
-            
-            # Initialize generation
-            gen = Generation(
-                args.model_name,
-                device=args.device,
-                adapter_path=resolve_adapter_path(args.fold),
-            )
-
-            generate_predictions(
-                gen, sets[0][args.fold]["validation"], predictions, args.fold, instruction,
-                seed=args.seed, batch_size=args.batch_size,
-            )
+        cv = data_in[args.cv_run]
+        folds = list(cv) if args.fold is None else [args.fold]
+        gen = None
+        for fold in tqdm(folds):
+            if gen is None or "ft-lora" in args.model_name:
+                free_generation(gen)
+                gen = new_gen(fold)
+            generate_predictions(gen, cv[fold]["validation"], fold, make_instruction(cv[fold]["training"]))
+        free_generation(gen)

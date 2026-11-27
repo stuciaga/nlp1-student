@@ -9,15 +9,16 @@
 date '+[%H:%M:%S-%d/%m/%y]'
 
 #Change the directories to correspond to the ones you have saved the project and data
-PROJECT_HOME=${HOME}/nlp1 
+PROJECT_HOME=${PROJECT_HOME:-${SLURM_SUBMIT_DIR:-$PWD}}  # submit from repo root
 INSTRUCTION_TYPE="few-shot"
 MODEL_NAME="qwen-0.5b-instruct"
 INPUT_ID_PATH="part3/data/cross_validation_sets.pkl"
 OUTPUT_ID_PATH="part3/predictions"
 
+cd "${PROJECT_HOME}"
 echo "Activating environment"
 #Add the path to the virtual environment you have created
-source /home/eilia/nlp1-student/.venv/bin/activate
+source ${PROJECT_HOME}/.venv/bin/activate
 
 echo "Executing python script"
 # In order to generate the in-distribution predictions

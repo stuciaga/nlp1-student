@@ -11,3 +11,7 @@ part2/results/
 __pycache__/
 logs/
 part2/CONTINUE_A.md
+
+# Part 3 generated data and predictions
+part3/data/
+part3/predictions/
